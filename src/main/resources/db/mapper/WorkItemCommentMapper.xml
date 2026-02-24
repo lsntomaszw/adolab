@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="dev.adolab.domain.workitem.dao.WorkItemCommentDao">
+
+    <select id="findByWorkItemId" resultType="dev.adolab.domain.workitem.entity.WorkItemComment">
+        SELECT * FROM work_item_comment
+        WHERE work_item_id = #{workItemId} AND sync_config_id = #{syncConfigId}
+        ORDER BY created_date ASC
+    </select>
+
+    <insert id="upsert">
+        INSERT INTO work_item_comment (id, work_item_id, sync_config_id, text,
+            created_by, created_date, modified_by, modified_date, version, synced_at)
+        VALUES (#{comment.id}, #{comment.workItemId}, #{comment.syncConfigId},
+            #{comment.text}, #{comment.createdBy}, #{comment.createdDate},
+            #{comment.modifiedBy}, #{comment.modifiedDate}, #{comment.version}, now())
+        ON CONFLICT (id, sync_config_id) DO UPDATE SET
+            text = EXCLUDED.text,
+            modified_by = EXCLUDED.modified_by,
+            modified_date = EXCLUDED.modified_date,
+            version = EXCLUDED.version,
+            synced_at = now()
+    </insert>
+
+    <insert id="upsertBatch">
+        <foreach collection="comments" item="comment" separator=";">
+            INSERT INTO work_item_comment (id, work_item_id, sync_config_id, text,
+                created_by, created_date, modified_by, modified_date, version, synced_at)
+            VALUES (#{comment.id}, #{comment.workItemId}, #{comment.syncConfigId},
+                #{comment.text}, #{comment.createdBy}, #{comment.createdDate},
+                #{comment.modifiedBy}, #{comment.modifiedDate}, #{comment.version}, now())
+            ON CONFLICT (id, sync_config_id) DO UPDATE SET
+                text = EXCLUDED.text,
+                modified_by = EXCLUDED.modified_by,
+                modified_date = EXCLUDED.modified_date,
+                version = EXCLUDED.version,
+                synced_at = now()
+        </foreach>
+    </insert>
+
+    <delete id="deleteByWorkItemId">
+        DELETE FROM work_item_comment
+        WHERE work_item_id = #{workItemId} AND sync_config_id = #{syncConfigId}
+    </delete>
+
+    <delete id="deleteBySyncConfigId">
+        DELETE FROM work_item_comment WHERE sync_config_id = #{syncConfigId}
+    </delete>
+
+    <select id="countByWorkItemId" resultType="int">
+        SELECT COUNT(*) FROM work_item_comment
+        WHERE work_item_id = #{workItemId} AND sync_config_id = #{syncConfigId}
+    </select>
+
+</mapper>
