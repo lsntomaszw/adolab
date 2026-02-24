@@ -7,8 +7,8 @@ import { WorkItem, WorkItemComment, WorkItemFilter, WorkItemMetadata } from '../
 export class WorkItemService {
   private http = inject(HttpClient);
 
-  search(filter: WorkItemFilter): Observable<WorkItem[]> {
-    let params = new HttpParams().set('syncConfigId', filter.syncConfigId);
+  search(filter: Partial<WorkItemFilter>): Observable<WorkItem[]> {
+    let params = new HttpParams();
     if (filter.type) params = params.set('type', filter.type);
     if (filter.state) params = params.set('state', filter.state);
     if (filter.assignedTo) params = params.set('assignedTo', filter.assignedTo);
@@ -16,39 +16,27 @@ export class WorkItemService {
     if (filter.q) params = params.set('q', filter.q);
     if (filter.sortBy) params = params.set('sortBy', filter.sortBy);
     if (filter.sortDir) params = params.set('sortDir', filter.sortDir);
-    if (filter.limit) params = params.set('limit', filter.limit);
-    if (filter.offset) params = params.set('offset', filter.offset);
 
     return this.http.get<WorkItem[]>('/api/workitems', { params });
   }
 
-  getById(id: number, syncConfigId: number): Observable<WorkItem> {
-    return this.http.get<WorkItem>(`/api/workitems/${id}`, {
-      params: { syncConfigId }
-    });
+  getById(id: number): Observable<WorkItem> {
+    return this.http.get<WorkItem>(`/api/workitems/${id}`);
   }
 
-  getChildren(parentId: number, syncConfigId: number): Observable<WorkItem[]> {
-    return this.http.get<WorkItem[]>(`/api/workitems/${parentId}/children`, {
-      params: { syncConfigId }
-    });
+  getChildren(parentId: number): Observable<WorkItem[]> {
+    return this.http.get<WorkItem[]>(`/api/workitems/${parentId}/children`);
   }
 
-  getComments(workItemId: number, syncConfigId: number): Observable<WorkItemComment[]> {
-    return this.http.get<WorkItemComment[]>(`/api/workitems/${workItemId}/comments`, {
-      params: { syncConfigId }
-    });
+  getComments(workItemId: number): Observable<WorkItemComment[]> {
+    return this.http.get<WorkItemComment[]>(`/api/workitems/${workItemId}/comments`);
   }
 
-  getMetadata(syncConfigId: number): Observable<WorkItemMetadata> {
-    return this.http.get<WorkItemMetadata>('/api/workitems/metadata', {
-      params: { syncConfigId }
-    });
+  getMetadata(): Observable<WorkItemMetadata> {
+    return this.http.get<WorkItemMetadata>('/api/workitems/metadata');
   }
 
-  getStateCounts(syncConfigId: number): Observable<Record<string, number>> {
-    return this.http.get<Record<string, number>>('/api/workitems/counts', {
-      params: { syncConfigId }
-    });
+  getStateCounts(): Observable<Record<string, number>> {
+    return this.http.get<Record<string, number>>('/api/workitems/counts');
   }
 }

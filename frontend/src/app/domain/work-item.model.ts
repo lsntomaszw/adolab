@@ -18,6 +18,7 @@ export interface WorkItem {
   createdBy: string | null;
   changedBy: string | null;
   syncedAt: string | null;
+  lastActivityDate: string | null;
 }
 
 export interface WorkItemComment {
@@ -36,9 +37,7 @@ export interface WorkItemComment {
 export interface SyncConfig {
   id: number;
   name: string;
-  epicId: number;
-  orgName: string;
-  project: string;
+  areaPath: string;
   lastSynced: string | null;
   createdAt: string;
 }

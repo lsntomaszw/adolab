@@ -1,19 +1,177 @@
-
-// Custom Theming for Angular Material
-// For more information: https://material.angular.dev/guide/theming
 @use '@angular/material' as mat;
+
+// Dark theme (default)
+:root, [data-theme="dark"] {
+  --bg-base: #0a0a10;
+  --bg-surface: #14141e;
+  --bg-elevated: #1c1c2a;
+  --bg-hover: #222233;
+  --bg-active: #2a2a3d;
+
+  --text-primary: #ebebf0;
+  --text-secondary: #8a8a9a;
+  --text-tertiary: #5c5c6e;
+
+  --border: #1f1f2e;
+  --border-light: #2a2a3d;
+
+  --accent: #7b61ff;
+  --accent-hover: #6a4ff0;
+  --accent-muted: rgba(123, 97, 255, 0.15);
+
+  --red: #e5484d;
+  --orange: #f76808;
+  --yellow: #f5d90a;
+  --green: #30a46c;
+  --blue: #3e63dd;
+  --purple: #8e4ec6;
+  --pink: #e93d82;
+
+  --red-muted: rgba(229, 72, 77, 0.15);
+  --green-muted: rgba(48, 164, 108, 0.15);
+  --blue-muted: rgba(62, 99, 221, 0.15);
+  --yellow-muted: rgba(245, 217, 10, 0.12);
+  --purple-muted: rgba(142, 78, 198, 0.15);
+  --pink-muted: rgba(233, 61, 130, 0.15);
+}
+
+// Light theme
+[data-theme="light"] {
+  --bg-base: #ffffff;
+  --bg-surface: #f9f9fb;
+  --bg-elevated: #f0f0f4;
+  --bg-hover: #e8e8ee;
+  --bg-active: #e0e0e8;
+
+  --text-primary: #1a1a2e;
+  --text-secondary: #5c5c70;
+  --text-tertiary: #8a8a9a;
+
+  --border: #e0e0e8;
+  --border-light: #d0d0da;
+
+  --accent: #6c4bd8;
+  --accent-hover: #5a3cc0;
+  --accent-muted: rgba(108, 75, 216, 0.1);
+
+  --red: #cd2b31;
+  --orange: #d4580a;
+  --yellow: #9e6c00;
+  --green: #18794e;
+  --blue: #3451b2;
+  --purple: #6e3b98;
+  --pink: #c41c68;
+
+  --red-muted: rgba(205, 43, 49, 0.08);
+  --green-muted: rgba(24, 121, 78, 0.08);
+  --blue-muted: rgba(52, 81, 178, 0.08);
+  --yellow-muted: rgba(158, 108, 0, 0.08);
+  --purple-muted: rgba(110, 59, 152, 0.08);
+  --pink-muted: rgba(196, 28, 104, 0.08);
+}
+
+// Shared design tokens
+:root {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --font-xs: 11px;
+  --font-sm: 12px;
+  --font-base: 13px;
+  --font-md: 14px;
+  --font-lg: 16px;
+  --font-xl: 20px;
+  --font-2xl: 24px;
+}
 
 html {
   @include mat.theme((
     color: (
-      theme-type: light,
-      primary: mat.$azure-palette,
+      theme-type: dark,
+      primary: mat.$violet-palette,
       tertiary: mat.$blue-palette,
     ),
-    typography: Roboto,
-    density: 0,
+    typography: Inter,
+    density: -2,
   ));
-}/* You can add global styles to this file, and also import other style files */
+}
 
-html, body { height: 100%; }
-body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
+[data-theme="light"] {
+  @include mat.theme((
+    color: (
+      theme-type: light,
+      primary: mat.$violet-palette,
+      tertiary: mat.$blue-palette,
+    ),
+    typography: Inter,
+    density: -2,
+  ));
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: var(--font-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+// Scrollbar styling
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 3px;
+  &:hover {
+    background: var(--text-tertiary);
+  }
+}
+
+// Angular Material overrides
+.mat-mdc-snack-bar-container {
+  --mdc-snackbar-container-color: var(--bg-elevated);
+  --mdc-snackbar-supporting-text-color: var(--text-primary);
+}
+
+.mat-mdc-progress-bar {
+  --mdc-linear-progress-active-indicator-color: var(--accent);
+  --mdc-linear-progress-track-color: var(--bg-elevated);
+}
+
+.mat-mdc-progress-spinner {
+  --mdc-circular-progress-active-indicator-color: var(--accent);
+}
+
+// Global link styling
+a {
+  color: var(--accent);
+  text-decoration: none;
+  &:hover {
+    color: var(--accent-hover);
+  }
+}
+
+// Selection
+::selection {
+  background: var(--accent-muted);
+  color: var(--text-primary);
+}

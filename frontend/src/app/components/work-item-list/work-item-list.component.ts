@@ -1,236 +1,414 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatChipsModule } from '@angular/material/chips';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { Router } from '@angular/router';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { WorkItemService } from '../../services/work-item.service';
+import { SyncService } from '../../services/sync.service';
 import { WorkItem, WorkItemFilter, WorkItemMetadata } from '../../domain/work-item.model';
 import { FilterBarComponent } from '../filter-bar/filter-bar.component';
 
 @Component({
   selector: 'app-work-item-list',
   standalone: true,
-  imports: [
-    CommonModule, RouterLink,
-    MatButtonModule, MatIconModule, MatChipsModule,
-    MatProgressSpinnerModule, MatButtonToggleModule,
-    FilterBarComponent,
-  ],
+  imports: [CommonModule, MatSnackBarModule, FilterBarComponent],
   template: `
-    <div class="header">
-      <button mat-button routerLink="/sync">
-        <mat-icon>arrow_back</mat-icon> Back to Syncs
-      </button>
-    </div>
+    <div class="list-page">
+      <!-- Top bar -->
+      <div class="page-header">
+        <div class="page-title-row">
+          <h1 class="page-title">Issues</h1>
+          <div class="header-actions">
+            @if (lastSynced()) {
+              <span class="sync-status">{{ timeAgo(lastSynced()!) }}</span>
+            }
+            <button class="btn btn-default" (click)="executeSync()" [disabled]="syncing()">
+              <svg class="spin-icon" [class.spinning]="syncing()" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                <path d="M16 16h5v5"/>
+              </svg>
+              Sync
+            </button>
+          </div>
+        </div>
 
-    <!-- Filter Bar -->
-    <app-filter-bar
-      [metadata]="metadata()"
-      [syncConfigId]="syncConfigId"
-      (filterChanged)="onFilterChanged($event)">
-    </app-filter-bar>
-
-    <!-- State tabs (GitHub-style) -->
-    <div class="state-tabs">
-      <button class="state-tab" [class.active]="stateFilter() === 'open'"
-              (click)="setStateFilter('open')">
-        <mat-icon class="state-icon open">radio_button_checked</mat-icon>
-        {{ openCount() }} Open
-      </button>
-      <button class="state-tab" [class.active]="stateFilter() === 'closed'"
-              (click)="setStateFilter('closed')">
-        <mat-icon class="state-icon closed">check_circle</mat-icon>
-        {{ closedCount() }} Closed
-      </button>
-      <button class="state-tab" [class.active]="stateFilter() === 'all'"
-              (click)="setStateFilter('all')">
-        All {{ totalCount() }}
-      </button>
-    </div>
-
-    <!-- Loading -->
-    @if (loading()) {
-      <div class="loading">
-        <mat-spinner diameter="40"></mat-spinner>
-      </div>
-    }
-
-    <!-- Work Items List (GitHub Issues style) -->
-    @if (!loading()) {
-      <div class="issue-list">
-        @for (item of items(); track item.id) {
-          <div class="issue-row" (click)="openDetail(item)">
-            <div class="issue-icon">
-              @if (isOpen(item)) {
-                <mat-icon class="state-icon open">radio_button_checked</mat-icon>
-              } @else {
-                <mat-icon class="state-icon closed">check_circle</mat-icon>
-              }
-            </div>
-            <div class="issue-content">
-              <div class="issue-title-row">
-                <span class="issue-title">{{ item.title }}</span>
-                <span class="label type-label" [attr.data-type]="item.workItemType">
-                  {{ item.workItemType }}
-                </span>
-                @if (item.priority && item.priority <= 2) {
-                  <span class="label priority-label">P{{ item.priority }}</span>
-                }
-                @if (item.tags) {
-                  @for (tag of splitTags(item.tags); track tag) {
-                    <span class="label tag-label">{{ tag }}</span>
-                  }
-                }
-              </div>
-              <div class="issue-meta">
-                #{{ item.id }}
-                @if (item.createdDate) {
-                  opened {{ timeAgo(item.createdDate) }}
-                }
-                @if (item.createdBy) {
-                  by {{ item.createdBy }}
-                }
-                @if (item.iterationPath) {
-                  &middot; {{ item.iterationPath }}
-                }
-              </div>
-            </div>
-            <div class="issue-right">
-              @if (item.assignedTo) {
-                <span class="assignee" [title]="item.assignedTo">
-                  {{ initials(item.assignedTo) }}
-                </span>
-              }
-            </div>
+        @if (syncing()) {
+          <div class="sync-progress">
+            <div class="sync-progress-bar"></div>
           </div>
         }
-
-        @if (items().length === 0) {
-          <div class="empty">No work items found matching your filters.</div>
-        }
       </div>
-    }
+
+      <!-- Filters -->
+      <div class="filters-section">
+        <app-filter-bar
+          [metadata]="metadata()"
+          (filterChanged)="onFilterChanged($event)">
+        </app-filter-bar>
+
+        <!-- State tabs -->
+        <div class="state-tabs">
+          <button class="tab" [class.active]="stateFilter() === 'all'"
+                  (click)="setStateFilter('all')">
+            All <span class="tab-count">{{ totalCount() }}</span>
+          </button>
+          <button class="tab" [class.active]="stateFilter() === 'open'"
+                  (click)="setStateFilter('open')">
+            Active <span class="tab-count">{{ openCount() }}</span>
+          </button>
+          <button class="tab" [class.active]="stateFilter() === 'closed'"
+                  (click)="setStateFilter('closed')">
+            Done <span class="tab-count">{{ closedCount() }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      @if (loading()) {
+        <div class="loading">
+          <div class="loading-spinner"></div>
+        </div>
+      }
+
+      <!-- Issue list -->
+      @if (!loading()) {
+        <div class="issue-list">
+          @for (item of items(); track item.id) {
+            <div class="issue-row" (click)="openDetail(item)">
+              <div class="issue-status">
+                @if (isOpen(item)) {
+                  <svg class="status-icon status-open" width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+                    <circle cx="8" cy="8" r="2" fill="currentColor"/>
+                  </svg>
+                } @else {
+                  <svg class="status-icon status-done" width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M5.5 8l2 2 3.5-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                }
+              </div>
+
+              <div class="issue-id">#{{ item.id }}</div>
+
+              <div class="issue-body">
+                <span class="issue-title">{{ item.title }}</span>
+              </div>
+
+              <div class="issue-meta-right">
+                <span class="type-badge" [attr.data-type]="item.workItemType">
+                  {{ shortType(item.workItemType) }}
+                </span>
+
+                <span class="col-assignee" [title]="item.assignedTo || ''">
+                  @if (item.assignedTo) {
+                    {{ shortName(item.assignedTo) }}
+                  } @else {
+                    <span class="empty-val">&mdash;</span>
+                  }
+                </span>
+
+                <span class="col-date" [title]="item.createdDate || ''">
+                  {{ formatDate(item.createdDate) }}
+                </span>
+
+                <span class="col-date" [title]="item.lastActivityDate || item.changedDate || ''">
+                  {{ formatDate(item.lastActivityDate || item.changedDate) }}
+                </span>
+              </div>
+            </div>
+          }
+
+          @if (items().length === 0) {
+            <div class="empty-state">
+              <div class="empty-icon">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>
+                </svg>
+              </div>
+              @if (!lastSynced()) {
+                <p>No issues synced yet. Click Sync to get started.</p>
+              } @else {
+                <p>No issues match your filters.</p>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
   `,
   styles: [`
-    .header { margin-bottom: 8px; }
-
-    .state-tabs {
-      display: flex;
-      gap: 16px;
-      padding: 12px 16px;
-      border: 1px solid #d0d7de;
-      border-radius: 6px 6px 0 0;
-      background: #f6f8fa;
+    .list-page {
+      max-width: 1150px;
+      margin: 0 auto;
+      padding: 24px 24px 48px;
     }
-    .state-tab {
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: 14px;
-      color: #57606a;
+
+    /* Header */
+    .page-header {
+      margin-bottom: 20px;
+    }
+    .page-title-row {
       display: flex;
       align-items: center;
-      gap: 4px;
-      padding: 4px 8px;
-      border-radius: 4px;
+      justify-content: space-between;
     }
-    .state-tab:hover { color: #24292f; }
-    .state-tab.active { font-weight: 600; color: #24292f; }
+    .page-title {
+      font-size: var(--font-xl);
+      font-weight: 600;
+      margin: 0;
+      letter-spacing: -0.02em;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sync-status {
+      font-size: var(--font-xs);
+      color: var(--text-tertiary);
+    }
 
-    .state-icon { font-size: 18px; width: 18px; height: 18px; }
-    .state-icon.open { color: #1a7f37; }
-    .state-icon.closed { color: #8250df; }
+    /* Button */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 30px;
+      padding: 0 12px;
+      border-radius: var(--radius-md);
+      font-family: inherit;
+      font-size: var(--font-sm);
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      border: none;
+    }
+    .btn-default {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      &:hover { background: var(--bg-hover); color: var(--text-primary); }
+      &:disabled { opacity: 0.5; cursor: not-allowed; }
+    }
 
-    .loading { display: flex; justify-content: center; padding: 40px; }
+    .spin-icon { transition: transform 0.2s; }
+    .spin-icon.spinning {
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Sync progress */
+    .sync-progress {
+      height: 2px;
+      background: var(--bg-elevated);
+      border-radius: 1px;
+      margin-top: 12px;
+      overflow: hidden;
+    }
+    .sync-progress-bar {
+      height: 100%;
+      width: 30%;
+      background: var(--accent);
+      border-radius: 1px;
+      animation: progress 1.5s ease-in-out infinite;
+    }
+    @keyframes progress {
+      0% { transform: translateX(-100%); width: 30%; }
+      50% { width: 50%; }
+      100% { transform: translateX(400%); width: 30%; }
+    }
+
+    /* Filters section */
+    .filters-section {
+      margin-bottom: 4px;
+    }
+
+    /* State tabs */
+    .state-tabs {
+      display: flex;
+      gap: 2px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0;
+    }
+    .tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: var(--font-sm);
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-bottom: -1px;
+
+      &:hover { color: var(--text-primary); }
+      &.active {
+        color: var(--text-primary);
+        border-bottom-color: var(--accent);
+      }
+    }
+    .tab-count {
+      color: var(--text-tertiary);
+      font-size: var(--font-xs);
+      font-weight: 400;
+    }
+
+    /* Loading */
+    .loading {
+      display: flex;
+      justify-content: center;
+      padding: 60px;
+    }
+    .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--border-light);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    /* Issue list */
     .issue-list {
-      border: 1px solid #d0d7de;
-      border-top: none;
-      border-radius: 0 0 6px 6px;
+      margin-top: 0;
     }
     .issue-row {
       display: flex;
-      align-items: flex-start;
-      padding: 12px 16px;
-      border-bottom: 1px solid #d0d7de;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 8px;
+      border-bottom: 1px solid var(--border);
       cursor: pointer;
-      gap: 12px;
+      transition: background 0.1s;
+
+      &:hover { background: var(--bg-hover); }
+      &:last-child { border-bottom: none; }
     }
-    .issue-row:last-child { border-bottom: none; }
-    .issue-row:hover { background: #f6f8fa; }
 
-    .issue-icon { padding-top: 2px; flex-shrink: 0; }
+    /* Status icons */
+    .issue-status {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+    }
+    .status-icon { display: block; }
+    .status-open { color: var(--blue); }
+    .status-done { color: var(--green); }
 
-    .issue-content { flex: 1; min-width: 0; }
-    .issue-title-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    /* Issue ID */
+    .issue-id {
+      flex-shrink: 0;
+      font-size: var(--font-xs);
+      color: var(--text-tertiary);
+      font-variant-numeric: tabular-nums;
+      min-width: 52px;
+    }
+
+    /* Issue body */
+    .issue-body {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+    }
     .issue-title {
-      font-weight: 600;
-      font-size: 15px;
-      color: #24292f;
-    }
-    .issue-title:hover { color: #0969da; }
-
-    .label {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 600;
-      line-height: 16px;
+      font-size: var(--font-base);
+      color: var(--text-primary);
       white-space: nowrap;
-    }
-    .type-label {
-      background: #ddf4ff;
-      color: #0969da;
-    }
-    .type-label[data-type="Bug"] { background: #ffebe9; color: #cf222e; }
-    .type-label[data-type="Task"] { background: #dafbe1; color: #1a7f37; }
-    .type-label[data-type="User Story"] { background: #fff8c5; color: #9a6700; }
-    .type-label[data-type="Feature"] { background: #fbefff; color: #8250df; }
-    .type-label[data-type="Epic"] { background: #ffeff7; color: #bf3989; }
-
-    .priority-label { background: #ffebe9; color: #cf222e; }
-    .tag-label { background: #e8e8e8; color: #555; }
-
-    .issue-meta {
-      font-size: 12px;
-      color: #57606a;
-      margin-top: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: block;
     }
 
-    .issue-right { flex-shrink: 0; }
-    .assignee {
+    /* Right meta */
+    .issue-meta-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .priority {
+      display: flex;
+      align-items: center;
+    }
+    .priority-high { color: var(--orange); }
+
+    .type-badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: var(--radius-sm);
+      font-size: var(--font-xs);
+      font-weight: 500;
+      white-space: nowrap;
+      background: var(--bg-active);
+      color: var(--text-secondary);
+    }
+    .type-badge[data-type="Bug"] { background: var(--red-muted); color: var(--red); }
+    .type-badge[data-type="Task"] { background: var(--blue-muted); color: var(--blue); }
+    .type-badge[data-type="User Story"] { background: var(--purple-muted); color: var(--purple); }
+    .type-badge[data-type="Feature"] { background: var(--green-muted); color: var(--green); }
+    .type-badge[data-type="Epic"] { background: var(--pink-muted); color: var(--pink); }
+
+    .iteration {
+      font-size: var(--font-xs);
+      color: var(--text-tertiary);
+      white-space: nowrap;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .avatar {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 28px;
-      height: 28px;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
-      background: #ddf4ff;
-      color: #0969da;
-      font-size: 11px;
+      background: var(--accent-muted);
+      color: var(--accent);
+      font-size: 9px;
       font-weight: 600;
+      flex-shrink: 0;
     }
 
-    .empty {
-      text-align: center;
-      padding: 40px;
-      color: #57606a;
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px;
+      color: var(--text-tertiary);
+    }
+    .empty-icon {
+      margin-bottom: 12px;
+      opacity: 0.4;
+    }
+    .empty-state p {
+      margin: 0;
+      font-size: var(--font-sm);
     }
   `]
 })
 export class WorkItemListComponent implements OnInit {
-  private route = inject(ActivatedRoute);
   private router = inject(Router);
   private workItemService = inject(WorkItemService);
+  private syncService = inject(SyncService);
+  private snackBar = inject(MatSnackBar);
 
-  syncConfigId = 0;
   items = signal<WorkItem[]>([]);
   metadata = signal<WorkItemMetadata | null>(null);
   loading = signal(true);
+  syncing = signal(false);
+  lastSynced = signal<string | null>(null);
   stateFilter = signal<'open' | 'closed' | 'all'>('all');
   stateCounts = signal<Record<string, number>>({});
   currentFilter: Partial<WorkItemFilter> = {};
@@ -250,31 +428,45 @@ export class WorkItemListComponent implements OnInit {
   totalCount = computed(() => this.stateCounts()['total'] || 0);
 
   ngOnInit() {
-    this.syncConfigId = Number(this.route.snapshot.paramMap.get('syncId'));
+    this.syncService.getConfig().subscribe(config => {
+      this.lastSynced.set(config.lastSynced);
+    });
     this.loadMetadata();
     this.loadStateCounts();
     this.loadItems();
   }
 
+  executeSync() {
+    this.syncing.set(true);
+    this.syncService.execute().subscribe({
+      next: result => {
+        this.syncing.set(false);
+        this.lastSynced.set(new Date().toISOString());
+        this.snackBar.open(`Synced ${result.itemsSynced} items in ${result.duration}`, 'OK', { duration: 5000 });
+        this.loadMetadata();
+        this.loadStateCounts();
+        this.loadItems();
+      },
+      error: err => {
+        this.syncing.set(false);
+        this.snackBar.open('Sync failed: ' + (err.error?.error || err.message), 'OK', { duration: 5000 });
+      }
+    });
+  }
+
   loadMetadata() {
-    this.workItemService.getMetadata(this.syncConfigId).subscribe(m => this.metadata.set(m));
+    this.workItemService.getMetadata().subscribe(m => this.metadata.set(m));
   }
 
   loadStateCounts() {
-    this.workItemService.getStateCounts(this.syncConfigId).subscribe(c => this.stateCounts.set(c));
+    this.workItemService.getStateCounts().subscribe(c => this.stateCounts.set(c));
   }
 
   loadItems() {
     this.loading.set(true);
-    const filter: WorkItemFilter = {
-      syncConfigId: this.syncConfigId,
-      ...this.currentFilter,
-    };
+    const filter: Partial<WorkItemFilter> = { ...this.currentFilter };
 
-    // Map state filter to actual Azure DevOps states
-    if (this.stateFilter() === 'open') {
-      // Exclude closed-type states — we leave state undefined and filter client-side
-    } else if (this.stateFilter() === 'closed') {
+    if (this.stateFilter() === 'closed') {
       filter.state = 'Closed';
     }
 
@@ -299,15 +491,24 @@ export class WorkItemListComponent implements OnInit {
   }
 
   openDetail(item: WorkItem) {
-    this.router.navigate(['/sync', this.syncConfigId, 'workitems', item.id]);
+    this.router.navigate(['/workitems', item.id]);
   }
 
   isOpen(item: WorkItem): boolean {
     return !['Closed', 'Resolved', 'Done', 'Removed'].includes(item.state);
   }
 
-  splitTags(tags: string): string[] {
-    return tags.split(';').map(t => t.trim()).filter(t => t.length > 0).slice(0, 3);
+  shortType(type: string): string {
+    const map: Record<string, string> = {
+      'User Story': 'Story',
+      'Product Backlog Item': 'PBI',
+    };
+    return map[type] || type;
+  }
+
+  shortIteration(path: string): string {
+    const parts = path.split('\\');
+    return parts[parts.length - 1];
   }
 
   initials(name: string): string {
@@ -321,8 +522,8 @@ export class WorkItemListComponent implements OnInit {
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     if (diffDays === 0) return 'today';
     if (diffDays === 1) return 'yesterday';
-    if (diffDays < 30) return `${diffDays} days ago`;
-    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-    return `${Math.floor(diffDays / 365)} years ago`;
+    if (diffDays < 30) return `${diffDays}d ago`;
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
+    return `${Math.floor(diffDays / 365)}y ago`;
   }
 }

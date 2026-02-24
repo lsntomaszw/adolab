@@ -7,23 +7,11 @@ import { SyncConfig, SyncResult } from '../domain/work-item.model';
 export class SyncService {
   private http = inject(HttpClient);
 
-  list(): Observable<SyncConfig[]> {
-    return this.http.get<SyncConfig[]>('/api/sync');
+  getConfig(): Observable<SyncConfig> {
+    return this.http.get<SyncConfig>('/api/sync/config');
   }
 
-  getById(id: number): Observable<SyncConfig> {
-    return this.http.get<SyncConfig>(`/api/sync/${id}`);
-  }
-
-  create(config: { name: string; epicId: number; orgName: string; project: string }): Observable<any> {
-    return this.http.post('/api/sync', config);
-  }
-
-  execute(id: number): Observable<SyncResult> {
-    return this.http.post<SyncResult>(`/api/sync/${id}/execute`, {});
-  }
-
-  delete(id: number): Observable<void> {
-    return this.http.delete<void>(`/api/sync/${id}`);
+  execute(): Observable<SyncResult> {
+    return this.http.post<SyncResult>('/api/sync/execute', {});
   }
 }

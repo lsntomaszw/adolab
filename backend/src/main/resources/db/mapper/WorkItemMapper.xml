@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="dev.adolab.domain.workitem.dao.WorkItemDao">
+
+    <select id="findByFilter" resultType="dev.adolab.domain.workitem.entity.WorkItem">
+        SELECT w.*,
+               GREATEST(w.changed_date, COALESCE(
+                   (SELECT MAX(c.modified_date) FROM work_item_comment c
+                    WHERE c.work_item_id = w.id AND c.sync_config_id = w.sync_config_id),
+                   w.changed_date
+               )) AS last_activity_date
+        FROM work_item w
+        WHERE w.sync_config_id = #{f.syncConfigId}
+        <if test="f.workItemType != null">
+            AND w.work_item_type = #{f.workItemType}
+        </if>
+        <if test="f.state != null">
+            AND w.state = #{f.state}
+        </if>
+        <if test="f.assignedTo != null">
+            AND w.assigned_to = #{f.assignedTo}
+        </if>
+        <if test="f.iterationPath != null">
+            AND w.iteration_path = #{f.iterationPath}
+        </if>
+        <if test="f.query != null">
+            AND (w.title ILIKE '%' || #{f.query} || '%'
+                 OR CAST(w.id AS TEXT) = #{f.query})
+        </if>
+        <choose>
+            <when test="f.sortBy == 'created'">
+                ORDER BY w.created_date
+            </when>
+            <when test="f.sortBy == 'changed'">
+                ORDER BY w.changed_date
+            </when>
+            <when test="f.sortBy == 'priority'">
+                ORDER BY w.priority
+            </when>
+            <when test="f.sortBy == 'title'">
+                ORDER BY w.title
+            </when>
+            <otherwise>
+                ORDER BY w.changed_date
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="f.sortDir == 'asc'">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+        <if test="f.limit != null">
+            LIMIT #{f.limit}
+        </if>
+        <if test="f.offset != null">
+            OFFSET #{f.offset}
+        </if>
+    </select>
+
+    <select id="findById" resultType="dev.adolab.domain.workitem.entity.WorkItem">
+        SELECT * FROM work_item
+        WHERE id = #{id} AND sync_config_id = #{syncConfigId}
+    </select>
+
+    <select id="findBySyncConfigId" resultType="dev.adolab.domain.workitem.entity.WorkItem">
+        SELECT * FROM work_item
+        WHERE sync_config_id = #{syncConfigId}
+        ORDER BY changed_date DESC
+    </select>
+
+    <select id="findChildren" resultType="dev.adolab.domain.workitem.entity.WorkItem">
+        SELECT * FROM work_item
+        WHERE parent_id = #{parentId} AND sync_config_id = #{syncConfigId}
+        ORDER BY work_item_type, title
+    </select>
+
+    <insert id="upsert">
+        INSERT INTO work_item (id, sync_config_id, rev, title, work_item_type, state,
+            assigned_to, description, priority, tags, area_path, iteration_path,
+            parent_id, watermark, created_date, changed_date, created_by, changed_by,
+            raw_fields, synced_at)
+        VALUES (#{item.id}, #{item.syncConfigId}, #{item.rev}, #{item.title},
+            #{item.workItemType}, #{item.state}, #{item.assignedTo}, #{item.description},
+            #{item.priority}, #{item.tags}, #{item.areaPath}, #{item.iterationPath},
+            #{item.parentId}, #{item.watermark}, #{item.createdDate}, #{item.changedDate},
+            #{item.createdBy}, #{item.changedBy},
+            CAST(#{item.rawFields} AS JSONB), now())
+        ON CONFLICT (id, sync_config_id) DO UPDATE SET
+            rev = EXCLUDED.rev,
+            title = EXCLUDED.title,
+            work_item_type = EXCLUDED.work_item_type,
+            state = EXCLUDED.state,
+            assigned_to = EXCLUDED.assigned_to,
+            description = EXCLUDED.description,
+            priority = EXCLUDED.priority,
+            tags = EXCLUDED.tags,
+            area_path = EXCLUDED.area_path,
+            iteration_path = EXCLUDED.iteration_path,
+            parent_id = EXCLUDED.parent_id,
+            watermark = EXCLUDED.watermark,
+            created_date = EXCLUDED.created_date,
+            changed_date = EXCLUDED.changed_date,
+            created_by = EXCLUDED.created_by,
+            changed_by = EXCLUDED.changed_by,
+            raw_fields = EXCLUDED.raw_fields,
+            synced_at = now()
+    </insert>
+
+    <insert id="upsertBatch">
+        <foreach collection="items" item="item" separator=";">
+            INSERT INTO work_item (id, sync_config_id, rev, title, work_item_type, state,
+                assigned_to, description, priority, tags, area_path, iteration_path,
+                parent_id, watermark, created_date, changed_date, created_by, changed_by,
+                raw_fields, synced_at)
+            VALUES (#{item.id}, #{item.syncConfigId}, #{item.rev}, #{item.title},
+                #{item.workItemType}, #{item.state}, #{item.assignedTo}, #{item.description},
+                #{item.priority}, #{item.tags}, #{item.areaPath}, #{item.iterationPath},
+                #{item.parentId}, #{item.watermark}, #{item.createdDate}, #{item.changedDate},
+                #{item.createdBy}, #{item.changedBy},
+                CAST(#{item.rawFields} AS JSONB), now())
+            ON CONFLICT (id, sync_config_id) DO UPDATE SET
+                rev = EXCLUDED.rev,
+                title = EXCLUDED.title,
+                work_item_type = EXCLUDED.work_item_type,
+                state = EXCLUDED.state,
+                assigned_to = EXCLUDED.assigned_to,
+                description = EXCLUDED.description,
+                priority = EXCLUDED.priority,
+                tags = EXCLUDED.tags,
+                area_path = EXCLUDED.area_path,
+                iteration_path = EXCLUDED.iteration_path,
+                parent_id = EXCLUDED.parent_id,
+                watermark = EXCLUDED.watermark,
+                created_date = EXCLUDED.created_date,
+                changed_date = EXCLUDED.changed_date,
+                created_by = EXCLUDED.created_by,
+                changed_by = EXCLUDED.changed_by,
+                raw_fields = EXCLUDED.raw_fields,
+                synced_at = now()
+        </foreach>
+    </insert>
+
+    <delete id="deleteBySyncConfigId">
+        DELETE FROM work_item WHERE sync_config_id = #{syncConfigId}
+    </delete>
+
+    <delete id="deleteByIds">
+        DELETE FROM work_item
+        WHERE sync_config_id = #{syncConfigId}
+        AND id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="findAllIds" resultType="java.lang.Integer">
+        SELECT id FROM work_item WHERE sync_config_id = #{syncConfigId}
+    </select>
+
+    <select id="countByState" resultType="int">
+        SELECT COUNT(*) FROM work_item
+        WHERE sync_config_id = #{syncConfigId}
+        <if test="state != null">
+            AND state = #{state}
+        </if>
+    </select>
+
+    <select id="findDistinctTypes" resultType="java.lang.String">
+        SELECT DISTINCT work_item_type FROM work_item
+        WHERE sync_config_id = #{syncConfigId} ORDER BY work_item_type
+    </select>
+
+    <select id="findDistinctStates" resultType="java.lang.String">
+        SELECT DISTINCT state FROM work_item
+        WHERE sync_config_id = #{syncConfigId} ORDER BY state
+    </select>
+
+    <select id="findDistinctAssignees" resultType="java.lang.String">
+        SELECT DISTINCT assigned_to FROM work_item
+        WHERE sync_config_id = #{syncConfigId} AND assigned_to IS NOT NULL
+        ORDER BY assigned_to
+    </select>
+
+    <select id="findDistinctIterations" resultType="java.lang.String">
+        SELECT DISTINCT iteration_path FROM work_item
+        WHERE sync_config_id = #{syncConfigId} AND iteration_path IS NOT NULL
+        ORDER BY iteration_path
+    </select>
+
+</mapper>

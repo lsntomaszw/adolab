@@ -1,0 +1,2 @@
+ALTER TABLE sync_config DROP COLUMN epic_id;
+ALTER TABLE sync_config ADD COLUMN area_path VARCHAR(500) NOT NULL DEFAULT '';
