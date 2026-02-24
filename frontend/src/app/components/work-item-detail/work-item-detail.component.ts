@@ -567,8 +567,14 @@ export class WorkItemDetailComponent implements OnInit {
   loading = signal(true);
 
   ngOnInit() {
-    this.itemId = Number(this.route.snapshot.paramMap.get('itemId'));
-    this.loadItem();
+    this.route.paramMap.subscribe(params => {
+      this.itemId = Number(params.get('itemId'));
+      this.loading.set(true);
+      this.item.set(null);
+      this.comments.set([]);
+      this.children.set([]);
+      this.loadItem();
+    });
   }
 
   loadItem() {

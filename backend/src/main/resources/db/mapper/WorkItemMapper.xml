@@ -34,11 +34,23 @@
             <when test="f.sortBy == 'changed'">
                 ORDER BY w.changed_date
             </when>
+            <when test="f.sortBy == 'activity'">
+                ORDER BY last_activity_date
+            </when>
             <when test="f.sortBy == 'priority'">
                 ORDER BY w.priority
             </when>
             <when test="f.sortBy == 'title'">
                 ORDER BY w.title
+            </when>
+            <when test="f.sortBy == 'type'">
+                ORDER BY w.work_item_type
+            </when>
+            <when test="f.sortBy == 'assignee'">
+                ORDER BY w.assigned_to
+            </when>
+            <when test="f.sortBy == 'id'">
+                ORDER BY w.id
             </when>
             <otherwise>
                 ORDER BY w.changed_date
@@ -57,18 +69,18 @@
     </select>
 
     <select id="findById" resultType="dev.adolab.domain.workitem.entity.WorkItem">
-        SELECT * FROM work_item
+        SELECT *, NULL AS last_activity_date FROM work_item
         WHERE id = #{id} AND sync_config_id = #{syncConfigId}
     </select>
 
     <select id="findBySyncConfigId" resultType="dev.adolab.domain.workitem.entity.WorkItem">
-        SELECT * FROM work_item
+        SELECT *, NULL AS last_activity_date FROM work_item
         WHERE sync_config_id = #{syncConfigId}
         ORDER BY changed_date DESC
     </select>
 
     <select id="findChildren" resultType="dev.adolab.domain.workitem.entity.WorkItem">
-        SELECT * FROM work_item
+        SELECT *, NULL AS last_activity_date FROM work_item
         WHERE parent_id = #{parentId} AND sync_config_id = #{syncConfigId}
         ORDER BY work_item_type, title
     </select>

@@ -74,6 +74,31 @@ import { FilterBarComponent } from '../filter-bar/filter-bar.component';
       <!-- Issue list -->
       @if (!loading()) {
         <div class="issue-list">
+          <!-- Column headers -->
+          <div class="issue-header">
+            <div class="issue-status"></div>
+            <div class="issue-id col-head" (click)="toggleSort('id')">#
+              <span class="sort-icon">{{ sortIcon('id') }}</span>
+            </div>
+            <div class="issue-body col-head" (click)="toggleSort('title')">Title
+              <span class="sort-icon">{{ sortIcon('title') }}</span>
+            </div>
+            <div class="issue-meta-right">
+              <span class="type-badge-head col-head" (click)="toggleSort('type')">Type
+                <span class="sort-icon">{{ sortIcon('type') }}</span>
+              </span>
+              <span class="col-assignee col-head" (click)="toggleSort('assignee')">Assignee
+                <span class="sort-icon">{{ sortIcon('assignee') }}</span>
+              </span>
+              <span class="col-date col-head" (click)="toggleSort('created')">Created
+                <span class="sort-icon">{{ sortIcon('created') }}</span>
+              </span>
+              <span class="col-date col-head" (click)="toggleSort('activity')">Updated
+                <span class="sort-icon">{{ sortIcon('activity') }}</span>
+              </span>
+            </div>
+          </div>
+
           @for (item of items(); track item.id) {
             <div class="issue-row" (click)="openDetail(item)">
               <div class="issue-status">
@@ -280,6 +305,38 @@ import { FilterBarComponent } from '../filter-bar/filter-bar.component';
     .issue-list {
       margin-top: 0;
     }
+
+    /* Column headers */
+    .issue-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .col-head {
+      cursor: pointer;
+      user-select: none;
+      font-size: var(--font-xs);
+      font-weight: 500;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      transition: color 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      &:hover { color: var(--text-secondary); }
+    }
+    .sort-icon {
+      font-size: 10px;
+      opacity: 0.6;
+    }
+    .type-badge-head {
+      min-width: 56px;
+      text-align: center;
+    }
+
     .issue-row {
       display: flex;
       align-items: center;
@@ -335,12 +392,6 @@ import { FilterBarComponent } from '../filter-bar/filter-bar.component';
       flex-shrink: 0;
     }
 
-    .priority {
-      display: flex;
-      align-items: center;
-    }
-    .priority-high { color: var(--orange); }
-
     .type-badge {
       display: inline-block;
       padding: 1px 6px;
@@ -350,6 +401,8 @@ import { FilterBarComponent } from '../filter-bar/filter-bar.component';
       white-space: nowrap;
       background: var(--bg-active);
       color: var(--text-secondary);
+      min-width: 56px;
+      text-align: center;
     }
     .type-badge[data-type="Bug"] { background: var(--red-muted); color: var(--red); }
     .type-badge[data-type="Task"] { background: var(--blue-muted); color: var(--blue); }
@@ -357,28 +410,26 @@ import { FilterBarComponent } from '../filter-bar/filter-bar.component';
     .type-badge[data-type="Feature"] { background: var(--green-muted); color: var(--green); }
     .type-badge[data-type="Epic"] { background: var(--pink-muted); color: var(--pink); }
 
-    .iteration {
+    .col-assignee {
+      font-size: var(--font-xs);
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 120px;
+      text-align: left;
+    }
+
+    .col-date {
       font-size: var(--font-xs);
       color: var(--text-tertiary);
       white-space: nowrap;
-      max-width: 120px;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      width: 72px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
     }
 
-    .avatar {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: var(--accent-muted);
-      color: var(--accent);
-      font-size: 9px;
-      font-weight: 600;
-      flex-shrink: 0;
-    }
+    .empty-val { color: var(--text-tertiary); }
 
     /* Empty state */
     .empty-state {
@@ -412,6 +463,8 @@ export class WorkItemListComponent implements OnInit {
   stateFilter = signal<'open' | 'closed' | 'all'>('all');
   stateCounts = signal<Record<string, number>>({});
   currentFilter: Partial<WorkItemFilter> = {};
+  sortBy = signal<string>('changed');
+  sortDir = signal<'asc' | 'desc'>('desc');
 
   openCount = computed(() => {
     const counts = this.stateCounts();
@@ -462,9 +515,26 @@ export class WorkItemListComponent implements OnInit {
     this.workItemService.getStateCounts().subscribe(c => this.stateCounts.set(c));
   }
 
+  toggleSort(col: string) {
+    if (this.sortBy() === col) {
+      this.sortDir.set(this.sortDir() === 'asc' ? 'desc' : 'asc');
+    } else {
+      this.sortBy.set(col);
+      this.sortDir.set(col === 'title' || col === 'assignee' || col === 'type' ? 'asc' : 'desc');
+    }
+    this.loadItems();
+  }
+
+  sortIcon(col: string): string {
+    if (this.sortBy() !== col) return '';
+    return this.sortDir() === 'asc' ? '\u25B2' : '\u25BC';
+  }
+
   loadItems() {
     this.loading.set(true);
     const filter: Partial<WorkItemFilter> = { ...this.currentFilter };
+    filter.sortBy = this.sortBy();
+    filter.sortDir = this.sortDir();
 
     if (this.stateFilter() === 'closed') {
       filter.state = 'Closed';
@@ -506,13 +576,18 @@ export class WorkItemListComponent implements OnInit {
     return map[type] || type;
   }
 
-  shortIteration(path: string): string {
-    const parts = path.split('\\');
-    return parts[parts.length - 1];
+  shortName(name: string): string {
+    const parts = name.split(' ');
+    if (parts.length >= 2) return parts[0] + ' ' + parts[1][0] + '.';
+    return name;
   }
 
-  initials(name: string): string {
-    return name.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase();
+  formatDate(dateStr: string | null): string {
+    if (!dateStr) return '\u2014';
+    const date = new Date(dateStr);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = date.toLocaleString('en', { month: 'short' });
+    return `${day} ${month}`;
   }
 
   timeAgo(dateStr: string): string {
