@@ -12,6 +12,7 @@ import dev.adolab.domain.workitem.dao.WorkItemDao;
 import dev.adolab.domain.workitem.entity.SyncConfig;
 import dev.adolab.domain.workitem.entity.WorkItem;
 import dev.adolab.domain.workitem.entity.WorkItemComment;
+import dev.adolab.domain.ai.EmbeddingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import dev.adolab.config.AzureDevOpsProperties;
@@ -35,19 +36,22 @@ public class SyncService {
     private final WorkItemDao workItemDao;
     private final WorkItemCommentDao commentDao;
     private final ObjectMapper objectMapper;
+    private final EmbeddingService embeddingService;
 
     public SyncService(AzureDevOpsClient azureClient,
                        AzureDevOpsProperties azureProps,
                        SyncConfigDao syncConfigDao,
                        WorkItemDao workItemDao,
                        WorkItemCommentDao commentDao,
-                       ObjectMapper objectMapper) {
+                       ObjectMapper objectMapper,
+                       EmbeddingService embeddingService) {
         this.azureClient = azureClient;
         this.azureProps = azureProps;
         this.syncConfigDao = syncConfigDao;
         this.workItemDao = workItemDao;
         this.commentDao = commentDao;
         this.objectMapper = objectMapper;
+        this.embeddingService = embeddingService;
     }
 
     public SyncConfig getOrCreateDefaultConfig() {
@@ -112,17 +116,21 @@ public class SyncService {
             if (!toFetch.isEmpty()) {
                 List<AzureWorkItemResponse> items = azureClient.getWorkItems(
                         org, project, new ArrayList<>(toFetch));
+                Map<Integer, WorkItem> syncedItems = new HashMap<>();
                 for (AzureWorkItemResponse item : items) {
                     WorkItem wi = mapWorkItem(item, syncConfigId);
                     workItemDao.upsert(wi);
+                    syncedItems.put(wi.id(), wi);
                 }
                 itemsAdded = newIds.size();
                 itemsUpdated = changedIds.size();
-            }
 
-            // Sync comments for changed items (watermark changed = possible comment change)
-            for (Integer itemId : toFetch) {
-                commentsSynced += syncCommentsForItem(org, project, itemId, syncConfigId);
+                // Sync comments + generate embeddings for changed items
+                for (Integer itemId : toFetch) {
+                    List<WorkItemComment> comments = syncCommentsForItemAndReturn(org, project, itemId, syncConfigId);
+                    commentsSynced += comments.size();
+                    generateEmbeddingSafe(syncedItems.get(itemId), comments);
+                }
             }
 
             // Delete removed items
@@ -139,15 +147,19 @@ public class SyncService {
             List<AzureWorkItemResponse> items = azureClient.getWorkItems(
                     org, project, new ArrayList<>(azureIds));
 
+            Map<Integer, WorkItem> syncedItems = new HashMap<>();
             for (AzureWorkItemResponse item : items) {
                 WorkItem wi = mapWorkItem(item, syncConfigId);
                 workItemDao.upsert(wi);
+                syncedItems.put(wi.id(), wi);
             }
             itemsAdded = items.size();
 
-            // Sync all comments
+            // Sync all comments + generate embeddings
             for (Integer itemId : azureIds) {
-                commentsSynced += syncCommentsForItem(org, project, itemId, syncConfigId);
+                List<WorkItemComment> comments = syncCommentsForItemAndReturn(org, project, itemId, syncConfigId);
+                commentsSynced += comments.size();
+                generateEmbeddingSafe(syncedItems.get(itemId), comments);
             }
         }
 
@@ -205,24 +217,34 @@ public class SyncService {
         return changedIds;
     }
 
-    private int syncCommentsForItem(String org, String project, int workItemId, Long syncConfigId) {
+    private List<WorkItemComment> syncCommentsForItemAndReturn(String org, String project,
+                                                                  int workItemId, Long syncConfigId) {
         try {
             AzureCommentListResponse response = azureClient.getWorkItemComments(
                     org, project, workItemId);
             if (response == null || response.comments() == null || response.comments().isEmpty()) {
-                return 0;
+                return List.of();
             }
 
-            int count = 0;
+            List<WorkItemComment> comments = new ArrayList<>();
             for (AzureCommentListResponse.AzureComment ac : response.comments()) {
                 WorkItemComment comment = mapComment(ac, workItemId, syncConfigId);
                 commentDao.upsert(comment);
-                count++;
+                comments.add(comment);
             }
-            return count;
+            return comments;
         } catch (Exception e) {
             log.warn("Failed to sync comments for work item {}: {}", workItemId, e.getMessage());
-            return 0;
+            return List.of();
+        }
+    }
+
+    private void generateEmbeddingSafe(WorkItem item, List<WorkItemComment> comments) {
+        if (item == null) return;
+        try {
+            embeddingService.generateForWorkItem(item, comments);
+        } catch (Exception e) {
+            log.warn("Failed to generate embedding for work item {}: {}", item.id(), e.getMessage());
         }
     }
 

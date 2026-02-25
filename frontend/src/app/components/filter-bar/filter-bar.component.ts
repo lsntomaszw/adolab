@@ -10,46 +10,61 @@ import { WorkItemFilter, WorkItemMetadata } from '../../domain/work-item.model';
   template: `
     <div class="filter-bar">
       <div class="search-wrapper">
-        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
-        </svg>
-        <input class="search-input" type="text" placeholder="Search issues..."
-               [(ngModel)]="searchQuery" (keyup.enter)="applyFilter()">
-      </div>
-
-      <div class="filter-group">
-        <select class="filter-select" [(ngModel)]="selectedType" (change)="applyFilter()">
-          <option value="">Type</option>
-          @for (type of metadata?.types || []; track type) {
-            <option [value]="type">{{ type }}</option>
-          }
-        </select>
-
-        <select class="filter-select" [(ngModel)]="selectedAssignee" (change)="applyFilter()">
-          <option value="">Assignee</option>
-          @for (assignee of metadata?.assignees || []; track assignee) {
-            <option [value]="assignee">{{ shortName(assignee) }}</option>
-          }
-        </select>
-
-        <select class="filter-select" [(ngModel)]="selectedIteration" (change)="applyFilter()">
-          <option value="">Iteration</option>
-          @for (iter of metadata?.iterations || []; track iter) {
-            <option [value]="iter">{{ shortIteration(iter) }}</option>
-          }
-        </select>
-
-        @if (hasActiveFilters()) {
-          <button class="clear-btn" (click)="clearFilters()">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
-            </svg>
-            Clear
-          </button>
+        @if (aiMode) {
+          <svg class="search-icon ai-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+        } @else {
+          <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+          </svg>
         }
+        <input class="search-input" [class.ai-active]="aiMode" type="text"
+               [placeholder]="aiMode ? 'Ask anything about work items...' : 'Search issues...'"
+               [(ngModel)]="searchQuery" (keyup.enter)="onEnter()">
+        <button class="ai-toggle" [class.active]="aiMode" (click)="toggleAi()"
+                title="Toggle AI smart search">
+          AI
+        </button>
       </div>
+
+      @if (!aiMode) {
+        <div class="filter-group">
+          <select class="filter-select" [(ngModel)]="selectedType" (change)="applyFilter()">
+            <option value="">Type</option>
+            @for (type of metadata?.types || []; track type) {
+              <option [value]="type">{{ type }}</option>
+            }
+          </select>
+
+          <select class="filter-select" [(ngModel)]="selectedAssignee" (change)="applyFilter()">
+            <option value="">Assignee</option>
+            @for (assignee of metadata?.assignees || []; track assignee) {
+              <option [value]="assignee">{{ shortName(assignee) }}</option>
+            }
+          </select>
+
+          <select class="filter-select" [(ngModel)]="selectedIteration" (change)="applyFilter()">
+            <option value="">Iteration</option>
+            @for (iter of metadata?.iterations || []; track iter) {
+              <option [value]="iter">{{ shortIteration(iter) }}</option>
+            }
+          </select>
+
+          @if (hasActiveFilters()) {
+            <button class="clear-btn" (click)="clearFilters()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+              </svg>
+              Clear
+            </button>
+          }
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -75,10 +90,14 @@ import { WorkItemFilter, WorkItemMetadata } from '../../domain/work-item.model';
       pointer-events: none;
     }
 
+    .search-icon.ai-icon {
+      color: var(--accent);
+    }
+
     .search-input {
       width: 100%;
       height: 32px;
-      padding: 0 10px 0 32px;
+      padding: 0 42px 0 32px;
       background: var(--bg-elevated);
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
@@ -90,6 +109,41 @@ import { WorkItemFilter, WorkItemMetadata } from '../../domain/work-item.model';
 
       &::placeholder { color: var(--text-tertiary); }
       &:focus { border-color: var(--accent); }
+
+      &.ai-active {
+        border-color: color-mix(in srgb, var(--accent), transparent 50%);
+        &:focus { border-color: var(--accent); }
+      }
+    }
+
+    .ai-toggle {
+      position: absolute;
+      right: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 24px;
+      padding: 0 8px;
+      background: var(--bg-active);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-tertiary);
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: all 0.15s;
+
+      &:hover {
+        color: var(--text-secondary);
+        border-color: var(--border-light);
+      }
+
+      &.active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
     }
 
     .filter-group {
@@ -149,11 +203,30 @@ import { WorkItemFilter, WorkItemMetadata } from '../../domain/work-item.model';
 export class FilterBarComponent {
   @Input() metadata: WorkItemMetadata | null = null;
   @Output() filterChanged = new EventEmitter<Partial<WorkItemFilter>>();
+  @Output() smartSearchQuery = new EventEmitter<string>();
+  @Output() aiModeChanged = new EventEmitter<boolean>();
 
   searchQuery = '';
   selectedType = '';
   selectedAssignee = '';
   selectedIteration = '';
+  aiMode = false;
+
+  toggleAi() {
+    this.aiMode = !this.aiMode;
+    this.aiModeChanged.emit(this.aiMode);
+    if (!this.aiMode && this.searchQuery) {
+      this.applyFilter();
+    }
+  }
+
+  onEnter() {
+    if (this.aiMode && this.searchQuery.trim()) {
+      this.smartSearchQuery.emit(this.searchQuery.trim());
+    } else {
+      this.applyFilter();
+    }
+  }
 
   applyFilter() {
     this.filterChanged.emit({

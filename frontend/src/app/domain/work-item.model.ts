@@ -72,3 +72,10 @@ export interface WorkItemFilter {
   limit?: number;
   offset?: number;
 }
+
+export interface SmartSearchResult {
+  responseType: 'list' | 'narrative';
+  items: WorkItem[];
+  narrative: string | null;
+  explanation: string;
+}

@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { WorkItemService } from '../../services/work-item.service';
 import { SyncService } from '../../services/sync.service';
-import { WorkItem, WorkItemFilter, WorkItemMetadata } from '../../domain/work-item.model';
+import { WorkItem, WorkItemFilter, WorkItemMetadata, SmartSearchResult } from '../../domain/work-item.model';
 import { FilterBarComponent } from '../filter-bar/filter-bar.component';
 
 @Component({
@@ -44,10 +44,13 @@ import { FilterBarComponent } from '../filter-bar/filter-bar.component';
       <div class="filters-section">
         <app-filter-bar
           [metadata]="metadata()"
-          (filterChanged)="onFilterChanged($event)">
+          (filterChanged)="onFilterChanged($event)"
+          (smartSearchQuery)="onSmartSearch($event)"
+          (aiModeChanged)="onAiModeChanged($event)">
         </app-filter-bar>
 
         <!-- State tabs -->
+        @if (!smartSearchActive()) {
         <div class="state-tabs">
           <button class="tab" [class.active]="stateFilter() === 'all'"
                   (click)="setStateFilter('all')">
@@ -62,7 +65,38 @@ import { FilterBarComponent } from '../filter-bar/filter-bar.component';
             Done <span class="tab-count">{{ closedCount() }}</span>
           </button>
         </div>
+        }
       </div>
+
+      <!-- Smart search result: narrative -->
+      @if (smartSearchResult() && smartSearchResult()!.responseType === 'narrative' && smartSearchResult()!.narrative) {
+        <div class="narrative-card">
+          <div class="narrative-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/>
+              <path d="M2 12l10 5 10-5"/>
+            </svg>
+            <span>AI Answer</span>
+          </div>
+          <div class="narrative-body" [innerHTML]="formatNarrative(smartSearchResult()!.narrative!)"></div>
+          @if (smartSearchResult()!.explanation) {
+            <div class="narrative-explanation">{{ smartSearchResult()!.explanation }}</div>
+          }
+        </div>
+      }
+
+      <!-- Smart search result: list explanation -->
+      @if (smartSearchResult() && smartSearchResult()!.responseType === 'list' && smartSearchResult()!.explanation) {
+        <div class="search-explanation">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+          {{ smartSearchResult()!.explanation }}
+        </div>
+      }
 
       <!-- Loading -->
       @if (loading()) {
@@ -431,6 +465,54 @@ import { FilterBarComponent } from '../filter-bar/filter-bar.component';
 
     .empty-val { color: var(--text-tertiary); }
 
+    /* Narrative card */
+    .narrative-card {
+      margin: 16px 0;
+      padding: 16px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+    }
+    .narrative-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: var(--font-xs);
+      font-weight: 600;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-bottom: 10px;
+    }
+    .narrative-body {
+      font-size: var(--font-base);
+      color: var(--text-primary);
+      line-height: 1.65;
+    }
+    .narrative-body :first-child { margin-top: 0; }
+    .narrative-body :last-child { margin-bottom: 0; }
+    .narrative-explanation {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: var(--font-xs);
+      color: var(--text-tertiary);
+      font-style: italic;
+    }
+
+    /* Search explanation banner */
+    .search-explanation {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      margin: 8px 0;
+      background: color-mix(in srgb, var(--accent), transparent 90%);
+      border-radius: var(--radius-md);
+      font-size: var(--font-xs);
+      color: var(--accent);
+    }
+
     /* Empty state */
     .empty-state {
       display: flex;
@@ -465,6 +547,8 @@ export class WorkItemListComponent implements OnInit {
   currentFilter: Partial<WorkItemFilter> = {};
   sortBy = signal<string>('changed');
   sortDir = signal<'asc' | 'desc'>('desc');
+  smartSearchActive = signal(false);
+  smartSearchResult = signal<SmartSearchResult | null>(null);
 
   openCount = computed(() => {
     const counts = this.stateCounts();
@@ -557,7 +641,34 @@ export class WorkItemListComponent implements OnInit {
 
   onFilterChanged(filter: Partial<WorkItemFilter>) {
     this.currentFilter = filter;
+    this.smartSearchResult.set(null);
+    this.smartSearchActive.set(false);
     this.loadItems();
+  }
+
+  onSmartSearch(query: string) {
+    this.loading.set(true);
+    this.smartSearchActive.set(true);
+    this.smartSearchResult.set(null);
+    this.workItemService.smartSearch(query).subscribe({
+      next: result => {
+        this.smartSearchResult.set(result);
+        this.items.set(result.items);
+        this.loading.set(false);
+      },
+      error: err => {
+        this.loading.set(false);
+        this.snackBar.open('Smart search failed: ' + (err.error?.error || err.message), 'OK', { duration: 5000 });
+      }
+    });
+  }
+
+  onAiModeChanged(aiMode: boolean) {
+    if (!aiMode) {
+      this.smartSearchActive.set(false);
+      this.smartSearchResult.set(null);
+      this.loadItems();
+    }
   }
 
   openDetail(item: WorkItem) {
@@ -588,6 +699,23 @@ export class WorkItemListComponent implements OnInit {
     const day = date.getDate().toString().padStart(2, '0');
     const month = date.toLocaleString('en', { month: 'short' });
     return `${day} ${month}`;
+  }
+
+  formatNarrative(text: string): string {
+    return text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+      .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
+      .replace(/<\/ul>\s*<ul>/g, '')
+      .replace(/#(\d+)/g, '<a href="/workitems/$1">#$1</a>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n/g, '<br>')
+      .replace(/^/, '<p>').replace(/$/, '</p>');
   }
 
   timeAgo(dateStr: string): string {

@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { WorkItem, WorkItemComment, WorkItemFilter, WorkItemMetadata } from '../domain/work-item.model';
+import { WorkItem, WorkItemComment, WorkItemFilter, WorkItemMetadata, SmartSearchResult } from '../domain/work-item.model';
 
 @Injectable({ providedIn: 'root' })
 export class WorkItemService {
@@ -38,5 +38,9 @@ export class WorkItemService {
 
   getStateCounts(): Observable<Record<string, number>> {
     return this.http.get<Record<string, number>>('/api/workitems/counts');
+  }
+
+  smartSearch(query: string): Observable<SmartSearchResult> {
+    return this.http.post<SmartSearchResult>('/api/search', { query });
   }
 }

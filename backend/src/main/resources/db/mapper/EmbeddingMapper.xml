@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="dev.adolab.domain.ai.dao.EmbeddingDao">
+
+    <insert id="upsert">
+        INSERT INTO work_item_embedding (work_item_id, sync_config_id, summary_en, keywords, embedding, model_version, generated_at)
+        VALUES (#{workItemId}, #{syncConfigId}, #{summaryEn},
+                CAST(#{keywords,typeHandler=dev.adolab.config.StringArrayTypeHandler} AS TEXT[]),
+                CAST(#{embedding} AS vector),
+                #{modelVersion}, now())
+        ON CONFLICT (work_item_id, sync_config_id) DO UPDATE SET
+            summary_en = EXCLUDED.summary_en,
+            keywords = EXCLUDED.keywords,
+            embedding = EXCLUDED.embedding,
+            model_version = EXCLUDED.model_version,
+            generated_at = now()
+    </insert>
+
+    <select id="findBySimilarity" resultType="dev.adolab.domain.workitem.entity.WorkItem">
+        SELECT w.*, NULL AS last_activity_date
+        FROM work_item_embedding e
+        JOIN work_item w ON w.id = e.work_item_id AND w.sync_config_id = e.sync_config_id
+        WHERE e.sync_config_id = #{syncConfigId}
+        AND e.embedding IS NOT NULL
+        <![CDATA[
+        ORDER BY e.embedding <=> CAST(#{queryEmbedding} AS vector)
+        ]]>
+        LIMIT #{limit}
+    </select>
+
+    <select id="smartSearch" resultType="dev.adolab.domain.workitem.entity.WorkItem">
+        SELECT w.*,
+               GREATEST(w.changed_date, COALESCE(
+                   (SELECT MAX(c.modified_date) FROM work_item_comment c
+                    WHERE c.work_item_id = w.id AND c.sync_config_id = w.sync_config_id),
+                   w.changed_date
+               )) AS last_activity_date
+        FROM work_item w
+        <if test="queryEmbedding != null">
+        JOIN work_item_embedding e ON e.work_item_id = w.id AND e.sync_config_id = w.sync_config_id
+        </if>
+        WHERE w.sync_config_id = #{syncConfigId}
+        <if test="queryEmbedding != null">
+            AND e.embedding IS NOT NULL
+        </if>
+        <if test="states != null and !states.isEmpty()">
+            AND w.state IN
+            <foreach collection="states" item="s" open="(" separator="," close=")">#{s}</foreach>
+        </if>
+        <if test="notStates != null and !notStates.isEmpty()">
+            AND w.state NOT IN
+            <foreach collection="notStates" item="s" open="(" separator="," close=")">#{s}</foreach>
+        </if>
+        <if test="types != null and !types.isEmpty()">
+            AND w.work_item_type IN
+            <foreach collection="types" item="t" open="(" separator="," close=")">#{t}</foreach>
+        </if>
+        <if test="assignee != null">
+            AND w.assigned_to ILIKE '%' || #{assignee} || '%'
+        </if>
+        <if test="dateFrom != null">
+            AND w.changed_date &gt;= CAST(#{dateFrom} AS TIMESTAMP)
+        </if>
+        <if test="dateTo != null">
+            AND w.changed_date &lt;= CAST(#{dateTo} AS TIMESTAMP)
+        </if>
+        <if test="stalenessDays != null">
+            AND GREATEST(w.changed_date, COALESCE(
+                (SELECT MAX(c.modified_date) FROM work_item_comment c
+                 WHERE c.work_item_id = w.id AND c.sync_config_id = w.sync_config_id),
+                w.changed_date
+            )) &lt; now() - (#{stalenessDays} || ' days')::INTERVAL
+        </if>
+        <choose>
+            <when test="sort == 'relevance' and queryEmbedding != null">
+                <![CDATA[ ORDER BY e.embedding <=> CAST(#{queryEmbedding} AS vector) ]]>
+            </when>
+            <when test="sort == 'staleness'">
+                ORDER BY last_activity_date ASC
+            </when>
+            <otherwise>
+                ORDER BY w.changed_date DESC
+            </otherwise>
+        </choose>
+        LIMIT #{limit}
+    </select>
+
+    <select id="countBySyncConfigId" resultType="int">
+        SELECT COUNT(*) FROM work_item_embedding WHERE sync_config_id = #{syncConfigId}
+    </select>
+
+</mapper>

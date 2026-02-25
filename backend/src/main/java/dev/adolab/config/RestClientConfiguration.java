@@ -19,4 +19,12 @@ public class RestClientConfiguration {
                 .defaultHeader("Authorization", "Basic " + credentials)
                 .build();
     }
+
+    @Bean
+    public RestClient openAiRestClient(OpenAiProperties props) {
+        return RestClient.builder()
+                .baseUrl("https://api.openai.com")
+                .defaultHeader("Authorization", "Bearer " + props.apiKey())
+                .build();
+    }
 }
