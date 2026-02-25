@@ -3,6 +3,7 @@ package dev.adolab.transport.rest.controller;
 import dev.adolab.domain.ai.EmbeddingService;
 import dev.adolab.domain.ai.SearchService;
 import dev.adolab.domain.ai.dao.EmbeddingDao;
+import dev.adolab.domain.ai.dto.EmbeddingSummary;
 import dev.adolab.domain.ai.dto.SmartSearchRequest;
 import dev.adolab.domain.ai.dto.SmartSearchResult;
 import dev.adolab.domain.sync.SyncService;
@@ -12,6 +13,7 @@ import dev.adolab.domain.workitem.entity.WorkItem;
 import dev.adolab.domain.workitem.entity.WorkItemComment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -75,6 +77,28 @@ public class SearchController {
                 "failed", failed,
                 "total", allItems.size()
         );
+    }
+
+    @GetMapping("/summary/{workItemId}")
+    public ResponseEntity<EmbeddingSummary> getSummary(@PathVariable Integer workItemId) {
+        Long syncConfigId = syncService.getOrCreateDefaultConfig().id();
+        EmbeddingSummary summary = embeddingDao.findByWorkItemId(workItemId, syncConfigId);
+        return summary != null ? ResponseEntity.ok(summary) : ResponseEntity.notFound().build();
+    }
+
+    @PostMapping("/refresh/{workItemId}")
+    public ResponseEntity<EmbeddingSummary> refreshEmbedding(@PathVariable Integer workItemId) {
+        Long syncConfigId = syncService.getOrCreateDefaultConfig().id();
+        WorkItem item = workItemDao.findById(workItemId, syncConfigId);
+        if (item == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        List<WorkItemComment> comments = commentDao.findByWorkItemId(workItemId, syncConfigId);
+        embeddingService.generateForWorkItem(item, comments);
+
+        EmbeddingSummary summary = embeddingDao.findByWorkItemId(workItemId, syncConfigId);
+        return ResponseEntity.ok(summary);
     }
 
     @GetMapping("/status")

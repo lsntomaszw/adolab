@@ -79,3 +79,11 @@ export interface SmartSearchResult {
   narrative: string | null;
   explanation: string;
 }
+
+export interface EmbeddingSummary {
+  workItemId: number;
+  summaryEn: string;
+  keywords: string[];
+  modelVersion: string;
+  generatedAt: string;
+}

@@ -2,7 +2,7 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { WorkItemService } from '../../services/work-item.service';
-import { WorkItem, WorkItemComment } from '../../domain/work-item.model';
+import { WorkItem, WorkItemComment, EmbeddingSummary } from '../../domain/work-item.model';
 
 @Component({
   selector: 'app-work-item-detail',
@@ -37,6 +37,54 @@ import { WorkItem, WorkItemComment } from '../../domain/work-item.model';
             @if (item()!.description) {
               <div class="description" [innerHTML]="item()!.description"></div>
             }
+
+            <!-- AI Summary -->
+            <div class="ai-summary-card" [class.empty]="!aiSummary() && !refreshingAi()">
+              <div class="ai-summary-header">
+                <div class="ai-summary-label">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                  </svg>
+                  AI Summary
+                  @if (!aiSummary() && !refreshingAi()) {
+                    <span class="ai-empty-hint">— not yet generated</span>
+                  }
+                </div>
+                <button class="ai-refresh-btn" (click)="refreshAi()" [disabled]="refreshingAi()">
+                  @if (refreshingAi()) {
+                    <svg class="spinning" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                    </svg>
+                    Generating...
+                  } @else if (aiSummary()) {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                      <path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                      <path d="M16 16h5v5"/>
+                    </svg>
+                  } @else {
+                    Generate
+                  }
+                </button>
+              </div>
+              @if (aiSummary()) {
+                <p class="ai-summary-text">{{ aiSummary()!.summaryEn }}</p>
+                @if (aiSummary()!.keywords && aiSummary()!.keywords.length > 0) {
+                  <div class="ai-summary-keywords">
+                    @for (kw of aiSummary()!.keywords; track kw) {
+                      <span class="ai-keyword">{{ kw }}</span>
+                    }
+                  </div>
+                }
+                <div class="ai-summary-meta">
+                  Generated {{ timeAgo(aiSummary()!.generatedAt) }} · {{ aiSummary()!.modelVersion }}
+                </div>
+              }
+            </div>
 
             <!-- Child items -->
             @if (children().length > 0) {
@@ -550,6 +598,97 @@ import { WorkItem, WorkItemComment } from '../../domain/work-item.model';
       &:hover { color: var(--text-primary); }
     }
 
+    /* AI Summary Card */
+    .ai-summary-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      margin-bottom: 24px;
+    }
+    .ai-summary-card.empty {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+    }
+    .ai-summary-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .ai-summary-card.empty .ai-summary-header {
+      margin-bottom: 0;
+    }
+    .ai-summary-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: var(--font-xs);
+      font-weight: 600;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .ai-empty-hint {
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: normal;
+      color: var(--text-tertiary);
+    }
+    .ai-refresh-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: var(--font-xs);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .ai-refresh-btn:hover:not(:disabled) {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: var(--border-light);
+    }
+    .ai-refresh-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .ai-summary-text {
+      margin: 0 0 10px 0;
+      font-size: var(--font-sm);
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+    .ai-summary-keywords {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .ai-keyword {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: var(--font-xs);
+      background: var(--accent-muted);
+      color: var(--accent);
+      font-weight: 500;
+    }
+    .ai-summary-meta {
+      font-size: var(--font-xs);
+      color: var(--text-tertiary);
+    }
+    .spinning {
+      animation: spin 1s linear infinite;
+    }
+
     @media (max-width: 768px) {
       .detail-layout { flex-direction: column; }
       .sidebar { width: 100%; }
@@ -565,14 +704,19 @@ export class WorkItemDetailComponent implements OnInit {
   comments = signal<WorkItemComment[]>([]);
   children = signal<WorkItem[]>([]);
   loading = signal(true);
+  aiSummary = signal<EmbeddingSummary | null>(null);
+  refreshingAi = signal(false);
+  azureInfo = signal<{organization: string, project: string, baseUrl: string} | null>(null);
 
   ngOnInit() {
+    this.workItemService.getAzureInfo().subscribe(info => this.azureInfo.set(info));
     this.route.paramMap.subscribe(params => {
       this.itemId = Number(params.get('itemId'));
       this.loading.set(true);
       this.item.set(null);
       this.comments.set([]);
       this.children.set([]);
+      this.aiSummary.set(null);
       this.loadItem();
     });
   }
@@ -583,6 +727,7 @@ export class WorkItemDetailComponent implements OnInit {
       this.loading.set(false);
       this.loadComments();
       this.loadChildren();
+      this.loadAiSummary();
     });
   }
 
@@ -594,6 +739,24 @@ export class WorkItemDetailComponent implements OnInit {
   loadChildren() {
     this.workItemService.getChildren(this.itemId)
       .subscribe(c => this.children.set(c));
+  }
+
+  loadAiSummary() {
+    this.workItemService.getAiSummary(this.itemId).subscribe({
+      next: summary => this.aiSummary.set(summary),
+      error: () => this.aiSummary.set(null)
+    });
+  }
+
+  refreshAi() {
+    this.refreshingAi.set(true);
+    this.workItemService.refreshAiSummary(this.itemId).subscribe({
+      next: summary => {
+        this.aiSummary.set(summary);
+        this.refreshingAi.set(false);
+      },
+      error: () => this.refreshingAi.set(false)
+    });
   }
 
   isOpen(): boolean {
@@ -639,6 +802,9 @@ export class WorkItemDetailComponent implements OnInit {
   azureUrl(): string {
     const item = this.item();
     if (!item) return '#';
-    return `https://dev.azure.com/_workitems/edit/${item.id}`;
+    const info = this.azureInfo();
+    if (!info) return '#';
+    const project = encodeURIComponent(info.project);
+    return `${info.baseUrl}/${info.organization}/${project}/_workitems/edit/${item.id}/`;
   }
 }

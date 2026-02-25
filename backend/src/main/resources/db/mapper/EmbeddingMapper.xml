@@ -2,6 +2,22 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="dev.adolab.domain.ai.dao.EmbeddingDao">
 
+    <resultMap id="embeddingSummaryResult" type="dev.adolab.domain.ai.dto.EmbeddingSummary">
+        <constructor>
+            <arg column="work_item_id" javaType="java.lang.Integer"/>
+            <arg column="summary_en" javaType="java.lang.String"/>
+            <arg column="keywords" javaType="[Ljava.lang.String;" typeHandler="dev.adolab.config.StringArrayTypeHandler"/>
+            <arg column="model_version" javaType="java.lang.String"/>
+            <arg column="generated_at" javaType="java.time.LocalDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findByWorkItemId" resultMap="embeddingSummaryResult">
+        SELECT work_item_id, summary_en, keywords, model_version, generated_at
+        FROM work_item_embedding
+        WHERE work_item_id = #{workItemId} AND sync_config_id = #{syncConfigId}
+    </select>
+
     <insert id="upsert">
         INSERT INTO work_item_embedding (work_item_id, sync_config_id, summary_en, keywords, embedding, model_version, generated_at)
         VALUES (#{workItemId}, #{syncConfigId}, #{summaryEn},

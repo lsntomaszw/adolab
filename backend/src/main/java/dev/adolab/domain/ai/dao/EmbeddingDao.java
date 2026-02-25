@@ -1,5 +1,6 @@
 package dev.adolab.domain.ai.dao;
 
+import dev.adolab.domain.ai.dto.EmbeddingSummary;
 import dev.adolab.domain.workitem.entity.WorkItem;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -8,6 +9,9 @@ import java.util.List;
 
 @Mapper
 public interface EmbeddingDao {
+
+    EmbeddingSummary findByWorkItemId(@Param("workItemId") Integer workItemId,
+                                      @Param("syncConfigId") Long syncConfigId);
 
     void upsert(@Param("workItemId") Integer workItemId,
                 @Param("syncConfigId") Long syncConfigId,

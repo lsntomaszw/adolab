@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { WorkItem, WorkItemComment, WorkItemFilter, WorkItemMetadata, SmartSearchResult } from '../domain/work-item.model';
+import { WorkItem, WorkItemComment, WorkItemFilter, WorkItemMetadata, SmartSearchResult, EmbeddingSummary } from '../domain/work-item.model';
 
 @Injectable({ providedIn: 'root' })
 export class WorkItemService {
@@ -42,5 +42,17 @@ export class WorkItemService {
 
   smartSearch(query: string): Observable<SmartSearchResult> {
     return this.http.post<SmartSearchResult>('/api/search', { query });
+  }
+
+  getAiSummary(workItemId: number): Observable<EmbeddingSummary> {
+    return this.http.get<EmbeddingSummary>(`/api/search/summary/${workItemId}`);
+  }
+
+  refreshAiSummary(workItemId: number): Observable<EmbeddingSummary> {
+    return this.http.post<EmbeddingSummary>(`/api/search/refresh/${workItemId}`, {});
+  }
+
+  getAzureInfo(): Observable<{organization: string, project: string, baseUrl: string}> {
+    return this.http.get<{organization: string, project: string, baseUrl: string}>('/api/sync/azure-info');
   }
 }
