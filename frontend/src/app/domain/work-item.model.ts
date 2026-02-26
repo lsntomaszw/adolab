@@ -86,4 +86,6 @@ export interface EmbeddingSummary {
   keywords: string[];
   modelVersion: string;
   generatedAt: string;
+  detectedLanguage: string | null;
+  translationEn: string | null;
 }

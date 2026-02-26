@@ -88,9 +88,12 @@ public class SyncService {
         int itemsDeleted = 0;
         int commentsSynced = 0;
 
+        log.info("Sync mode: {} (lastSynced={})", isIncremental ? "INCREMENTAL" : "FULL", config.lastSynced());
+
         if (isIncremental) {
             // Incremental sync
             Set<Integer> existingIds = new HashSet<>(workItemDao.findAllIds(syncConfigId));
+            log.info("Existing items in DB: {}", existingIds.size());
 
             // Detect new items
             Set<Integer> newIds = new HashSet<>(azureIds);
@@ -105,8 +108,13 @@ public class SyncService {
             if (!existingIds.isEmpty()) {
                 List<Integer> existingInAzure = new ArrayList<>(existingIds);
                 existingInAzure.retainAll(azureIds);
+                long wmStart = System.currentTimeMillis();
                 changedIds = detectChangedByWatermark(org, project, existingInAzure, syncConfigId);
+                log.info("Watermark check: {} of {} items changed (took {}ms)",
+                        changedIds.size(), existingInAzure.size(), System.currentTimeMillis() - wmStart);
             }
+
+            log.info("Incremental summary: new={}, changed={}, deleted={}", newIds.size(), changedIds.size(), deletedIds.size());
 
             // Fetch and upsert changed + new items
             Set<Integer> toFetch = new HashSet<>();
@@ -213,7 +221,7 @@ public class SyncService {
             }
         }
 
-        log.debug("Watermark comparison: {} of {} items changed", changedIds.size(), itemIds.size());
+        log.info("Watermark detail: {} of {} items detected as changed", changedIds.size(), itemIds.size());
         return changedIds;
     }
 

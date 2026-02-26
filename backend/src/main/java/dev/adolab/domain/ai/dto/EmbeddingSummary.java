@@ -7,5 +7,7 @@ public record EmbeddingSummary(
         String summaryEn,
         String[] keywords,
         String modelVersion,
-        LocalDateTime generatedAt
+        LocalDateTime generatedAt,
+        String detectedLanguage,
+        String translationEn
 ) {}

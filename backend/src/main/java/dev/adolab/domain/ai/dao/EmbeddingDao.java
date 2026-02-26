@@ -18,7 +18,9 @@ public interface EmbeddingDao {
                 @Param("summaryEn") String summaryEn,
                 @Param("keywords") String[] keywords,
                 @Param("embedding") String embedding,
-                @Param("modelVersion") String modelVersion);
+                @Param("modelVersion") String modelVersion,
+                @Param("detectedLanguage") String detectedLanguage,
+                @Param("translationEn") String translationEn);
 
     List<WorkItem> findBySimilarity(@Param("syncConfigId") Long syncConfigId,
                                     @Param("queryEmbedding") String queryEmbedding,

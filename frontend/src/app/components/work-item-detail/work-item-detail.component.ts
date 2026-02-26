@@ -33,11 +33,6 @@ import { WorkItem, WorkItemComment, EmbeddingSummary } from '../../domain/work-i
           <div class="main-col">
             <h1 class="detail-title">{{ item()!.title }}</h1>
 
-            <!-- Description -->
-            @if (item()!.description) {
-              <div class="description" [innerHTML]="item()!.description"></div>
-            }
-
             <!-- AI Summary -->
             <div class="ai-summary-card" [class.empty]="!aiSummary() && !refreshingAi()">
               <div class="ai-summary-header">
@@ -85,6 +80,32 @@ import { WorkItem, WorkItemComment, EmbeddingSummary } from '../../domain/work-i
                 </div>
               }
             </div>
+
+            <!-- English Translation (for non-English content) -->
+            @if (aiSummary()?.translationEn) {
+              <div class="translation-card">
+                <div class="translation-header">
+                  <div class="translation-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/>
+                      <path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>
+                    </svg>
+                    English Translation
+                    <span class="translation-lang">from {{ languageName(aiSummary()!.detectedLanguage!) }}</span>
+                  </div>
+                </div>
+                <p class="translation-text">{{ aiSummary()!.translationEn }}</p>
+                <div class="translation-meta">
+                  Auto-translated by AI · {{ aiSummary()!.modelVersion }}
+                </div>
+              </div>
+            }
+
+            <!-- Description -->
+            @if (item()!.description) {
+              <div class="description" [innerHTML]="item()!.description"></div>
+            }
 
             <!-- Child items -->
             @if (children().length > 0) {
@@ -242,6 +263,24 @@ import { WorkItem, WorkItemComment, EmbeddingSummary } from '../../domain/work-i
                 <span class="meta-date">{{ timeAgo(item()!.createdDate!) }}</span>
               </div>
             </div>
+
+            @if (item()!.changedDate) {
+              <div class="prop">
+                <div class="prop-label">Modified</div>
+                <div class="prop-value">
+                  <span class="meta-timestamp">{{ formatTimestamp(item()!.changedDate!) }}</span>
+                </div>
+              </div>
+            }
+
+            @if (item()!.syncedAt) {
+              <div class="prop">
+                <div class="prop-label">Last synced</div>
+                <div class="prop-value">
+                  <span class="meta-timestamp">{{ formatTimestamp(item()!.syncedAt!) }}</span>
+                </div>
+              </div>
+            }
 
             <div class="sidebar-divider"></div>
 
@@ -564,6 +603,7 @@ import { WorkItem, WorkItemComment, EmbeddingSummary } from '../../domain/work-i
 
     .meta-text { color: var(--text-secondary); }
     .meta-date { color: var(--text-tertiary); font-size: var(--font-xs); }
+    .meta-timestamp { color: var(--text-secondary); font-size: var(--font-xs); font-variant-numeric: tabular-nums; }
 
     .tags-list { gap: 4px; }
     .tag {
@@ -689,6 +729,48 @@ import { WorkItem, WorkItemComment, EmbeddingSummary } from '../../domain/work-i
       animation: spin 1s linear infinite;
     }
 
+    /* Translation Card */
+    .translation-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      margin-bottom: 24px;
+    }
+    .translation-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .translation-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: var(--font-xs);
+      font-weight: 600;
+      color: var(--blue);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .translation-lang {
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: normal;
+      color: var(--text-tertiary);
+    }
+    .translation-text {
+      margin: 0 0 10px 0;
+      font-size: var(--font-sm);
+      line-height: 1.7;
+      color: var(--text-secondary);
+      white-space: pre-line;
+    }
+    .translation-meta {
+      font-size: var(--font-xs);
+      color: var(--text-tertiary);
+    }
+
     @media (max-width: 768px) {
       .detail-layout { flex-direction: column; }
       .sidebar { width: 100%; }
@@ -797,6 +879,23 @@ export class WorkItemDetailComponent implements OnInit {
     if (diffDays < 30) return `${diffDays}d ago`;
     if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
     return `${Math.floor(diffDays / 365)}y ago`;
+  }
+
+  languageName(code: string): string {
+    const names: Record<string, string> = {
+      'el': 'Greek', 'de': 'German', 'fr': 'French', 'es': 'Spanish',
+      'it': 'Italian', 'pt': 'Portuguese', 'ru': 'Russian', 'zh': 'Chinese',
+      'ja': 'Japanese', 'ko': 'Korean', 'ar': 'Arabic', 'nl': 'Dutch',
+      'pl': 'Polish', 'tr': 'Turkish', 'sv': 'Swedish', 'cs': 'Czech',
+      'bg': 'Bulgarian', 'ro': 'Romanian', 'uk': 'Ukrainian', 'hr': 'Croatian',
+    };
+    return names[code] || code.toUpperCase();
+  }
+
+  formatTimestamp(dateStr: string): string {
+    const date = new Date(dateStr);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
   azureUrl(): string {

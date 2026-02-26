@@ -24,10 +24,16 @@ public class EmbeddingService {
             and comments of a work item, produce a JSON response with exactly this structure:
             {
               "summary": "2-3 sentence English summary covering the full context including key discussions from comments",
-              "keywords": ["keyword1", "keyword2", "keyword3"]
+              "keywords": ["keyword1", "keyword2", "keyword3"],
+              "detectedLanguage": "ISO 639-1 code of the primary language used in the description and comments (e.g. 'en', 'el', 'de')",
+              "translationEn": "If the content is NOT in English, provide a thorough English translation of the description and key comment content. Preserve all meaningful information faithfully - this is a translation, not a summary. If the content is already in English, set this to null."
             }
             Include context from ALL comments - they often contain critical information about decisions, \
             blockers, and progress. Extract 5-10 meaningful keywords that capture the essence of the work item. \
+            For detectedLanguage, detect the primary language of the description and comment text \
+            (ignore metadata fields like State, Type which are always in English). \
+            For translationEn, only produce a translation when the content language is NOT English. \
+            The translation should faithfully render the description and substantive comment content into English. \
             Return ONLY valid JSON, no markdown formatting.""";
 
     private final OpenAiClient openAiClient;
@@ -51,6 +57,8 @@ public class EmbeddingService {
 
         String summaryEn;
         String[] keywords;
+        String detectedLanguage = null;
+        String translationEn = null;
         try {
             JsonNode json = objectMapper.readTree(llmResponse);
             summaryEn = json.get("summary").asText();
@@ -61,6 +69,12 @@ public class EmbeddingService {
                 }
             }
             keywords = kwList.toArray(new String[0]);
+            if (json.has("detectedLanguage") && !json.get("detectedLanguage").isNull()) {
+                detectedLanguage = json.get("detectedLanguage").asText();
+            }
+            if (json.has("translationEn") && !json.get("translationEn").isNull()) {
+                translationEn = json.get("translationEn").asText();
+            }
         } catch (Exception e) {
             log.warn("Failed to parse LLM summary for work item {}, using raw response", item.id(), e);
             summaryEn = llmResponse;
@@ -73,10 +87,11 @@ public class EmbeddingService {
 
         // Step 3: Store in DB
         embeddingDao.upsert(item.id(), item.syncConfigId(), summaryEn, keywords,
-                embeddingStr, props.embeddingModel());
+                embeddingStr, props.embeddingModel(), detectedLanguage, translationEn);
 
-        log.debug("Generated embedding for work item {} (summary: {} chars, {} keywords)",
-                item.id(), summaryEn.length(), keywords.length);
+        log.debug("Generated embedding for work item {} (lang={}, summary: {} chars, {} keywords, translation: {})",
+                item.id(), detectedLanguage, summaryEn.length(), keywords.length,
+                translationEn != null ? translationEn.length() + " chars" : "none");
     }
 
     public String embedQuery(String query) {

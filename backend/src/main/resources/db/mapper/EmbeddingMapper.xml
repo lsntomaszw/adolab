@@ -9,27 +9,35 @@
             <arg column="keywords" javaType="[Ljava.lang.String;" typeHandler="dev.adolab.config.StringArrayTypeHandler"/>
             <arg column="model_version" javaType="java.lang.String"/>
             <arg column="generated_at" javaType="java.time.LocalDateTime"/>
+            <arg column="detected_language" javaType="java.lang.String"/>
+            <arg column="translation_en" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
     <select id="findByWorkItemId" resultMap="embeddingSummaryResult">
-        SELECT work_item_id, summary_en, keywords, model_version, generated_at
+        SELECT work_item_id, summary_en, keywords, model_version, generated_at,
+               detected_language, translation_en
         FROM work_item_embedding
         WHERE work_item_id = #{workItemId} AND sync_config_id = #{syncConfigId}
     </select>
 
     <insert id="upsert">
-        INSERT INTO work_item_embedding (work_item_id, sync_config_id, summary_en, keywords, embedding, model_version, generated_at)
+        INSERT INTO work_item_embedding (work_item_id, sync_config_id, summary_en, keywords,
+                                         embedding, model_version, generated_at,
+                                         detected_language, translation_en)
         VALUES (#{workItemId}, #{syncConfigId}, #{summaryEn},
                 CAST(#{keywords,typeHandler=dev.adolab.config.StringArrayTypeHandler} AS TEXT[]),
                 CAST(#{embedding} AS vector),
-                #{modelVersion}, now())
+                #{modelVersion}, now(),
+                #{detectedLanguage}, #{translationEn})
         ON CONFLICT (work_item_id, sync_config_id) DO UPDATE SET
             summary_en = EXCLUDED.summary_en,
             keywords = EXCLUDED.keywords,
             embedding = EXCLUDED.embedding,
             model_version = EXCLUDED.model_version,
-            generated_at = now()
+            generated_at = now(),
+            detected_language = EXCLUDED.detected_language,
+            translation_en = EXCLUDED.translation_en
     </insert>
 
     <select id="findBySimilarity" resultType="dev.adolab.domain.workitem.entity.WorkItem">

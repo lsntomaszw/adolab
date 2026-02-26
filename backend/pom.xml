@@ -12,9 +12,9 @@
     </parent>
 
     <groupId>dev.adolab</groupId>
-    <artifactId>adolab</artifactId>
+    <artifactId>lsn-ado</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>adolab</name>
+    <name>lsn-ado</name>
     <description>Custom UI for Azure DevOps Work Items</description>
 
     <properties>
